@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>土石流防災逃生大冒險 - 像素競速版</title>
+    <!-- 引入像素風復古字型與圖標 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a;
+            overflow: hidden;
+            user-select: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+        }
+
+        /* 復古像素字體樣式 */
+        .pixel-font {
+            font-family: 'Press Start 2P', 'Noto Sans TC', monospace;
+        }
+
+        /* 像素化渲染，防止圖片與 Canvas 縮放時變模糊 */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* 街機螢幕微凸透鏡與掃描線效果 (CRT) - 只在上方遊戲 Canvas 容器生效 */
+        .crt-screen {
+            position: relative;
+            overflow: hidden;
+        }
+        .crt-screen::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* 霓虹警告燈呼吸動畫 */
+        @keyframes neonPulse {
+            0%, 100% { box-shadow: 0 0 5px #ef4444, inset 0 0 5px #ef4444; }
+            50% { box-shadow: 0 0 20px #ef4444, inset 0 0 10px #ef4444; }
+        }
+        .warning-neon {
+            animation: neonPulse 1s infinite;
+        }
+
+        /* 按鈕凸起點擊回饋 */
+        .arcade-btn {
+            box-shadow: 0 8px 0 #b45309;
+            transition: all 0.05s ease;
+        }
+        .arcade-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 #b45309;
+        }
+
+        /* 縮放容器，確保生生用平板(iPad)或大螢幕都不破版 */
+        #arcade-container {
+            transform-origin: center center;
+            transition: transform 0.1s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 外層自動縮放 RWD 容器 -->
+    <div id="arcade-container" class="relative w-[1100px] h-[720px] bg-stone-900 border-[14px] border-stone-800 rounded-[40px] shadow-[0_25px_50px_rgba(0,0,0,0.8)] flex flex-col justify-between overflow-hidden flex-shrink-0">
+        
+        <!-- 街機頂部發光看板 (Marquee) -->
+        <div class="h-[60px] bg-gradient-to-r from-red-600 via-amber-500 to-red-600 border-b-8 border-stone-950 flex items-center justify-between px-8 shadow-inner">
+            <div class="flex items-center gap-2 warning-neon bg-red-800 text-white font-black text-xs px-2.5 py-1 rounded border border-red-500">
+                <i class="fa-solid fa-triangle-exclamation animate-pulse"></i> <span data-zh="危險！" data-en="DANGER!">危險！</span>
+            </div>
+            <div class="pixel-font text-white text-base md:text-lg font-bold tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,1)] flex items-center gap-3">
+                <span data-zh="⛰️ 土石流逃生大冒險 ⛰️" data-en="⛰️ DEBRIS FLOW ESCAPE ⛰️">⛰️ 土石流逃生大冒險 ⛰️</span>
+            </div>
+            <!-- 一鍵雙語切換按鈕 (國際性關鍵得分點) -->
+            <button onclick="toggleLanguage()" class="px-3 py-1 bg-stone-950 hover:bg-stone-800 text-amber-400 font-extrabold text-xs border-2 border-amber-400 rounded transition-all flex items-center gap-1">
+                <i class="fa-solid fa-earth-americas"></i> <span id="lang-btn-text">English</span>
+            </button>
+        </div>
+
+        <!-- 遊戲主畫面容器 -->
+        <div class="flex-grow relative bg-slate-950 flex flex-col">
+            
+            <!-- A. 遊戲開始畫面 -->
+            <div id="start-screen" class="absolute inset-0 bg-stone-950/95 z-50 flex flex-col items-center justify-center p-8">
+                <div class="pixel-font text-amber-500 text-sm mb-4 animate-bounce" data-zh="INSERT COIN TO PLAY / 請投幣開始遊戲" data-en="INSERT COIN TO PLAY / PLEASE INSERT COIN">
+                    INSERT COIN TO PLAY / 請投幣開始遊戲
+                </div>
+                <!-- 像素標題 -->
+                <h1 class="text-5xl font-black text-center tracking-wider text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-amber-400 to-red-600 drop-shadow-[0_5px_0_rgba(0,0,0,1)] mb-6" data-zh="土石流防災逃生大冒險" data-en="Debris Flow Disaster Escape">
+                    土石流防災逃生大冒險
+                </h1>
+                <p class="text-stone-300 text-base max-w-[850px] text-center leading-relaxed mb-8 font-bold" id="start-desc">
+                    <!-- 由 JS 根據語言動態載入 -->
+                </p>
+                <button onclick="startGame()" class="px-10 py-5 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-2xl rounded-2xl border-b-8 border-emerald-700 active:border-b-2 active:translate-y-1 transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center gap-4">
+                    <i class="fa-solid fa-play"></i> <span data-zh="投幣開始冒險 (START)" data-en="Insert Coin & Start Adventure">投幣開始冒險 (START)</span>
+                </button>
+            </div>
+
+            <!-- B. 2D 像素遊戲畫布 (Canvas 渲染區) -->
+            <div class="relative w-full h-[380px] bg-slate-900 border-b-8 border-stone-950 crt-screen">
+                <canvas id="gameCanvas" class="w-full h-full"></canvas>
+                
+                <!-- 畫布上方的懸浮 HUD -->
+                <div class="absolute top-4 left-6 right-6 flex justify-between items-center pointer-events-none">
+                    <!-- 安全距離計量 -->
+                    <div id="hud-distance-card" class="bg-black/80 px-4 py-2 rounded-xl border-2 border-red-500 flex items-center gap-3 transition-all duration-300">
+                        <span class="text-red-500 font-extrabold text-sm"><i class="fa-solid fa-person-running"></i> <span data-zh="與土石流距離：" data-en="Distance:">與土石流距離：</span></span>
+                        <span id="hud-distance" class="pixel-font text-white text-xl font-bold">60</span>
+                        <span class="text-white text-sm font-bold">M</span>
+                    </div>
+                    <!-- 逃生累計時間 -->
+                    <div class="bg-black/80 px-4 py-2 rounded-xl border-2 border-emerald-500 flex items-center gap-3">
+                        <span class="text-emerald-400 font-extrabold text-sm"><i class="fa-solid fa-clock"></i> <span data-zh="逃生時間：" data-en="Time:">逃生時間：</span></span>
+                        <span id="hud-score" class="pixel-font text-yellow-400 text-xl font-bold">0.0s</span>
+                    </div>
+                </div>
+
+                <!-- 速度突擊特效文字 (Speed Dash!) -->
+                <div id="dash-overlay" class="hidden absolute inset-0 bg-cyan-500/10 pointer-events-none flex items-center justify-center">
+                    <div class="pixel-font text-cyan-400 text-4xl font-extrabold tracking-widest animate-ping">
+                        SPEED DASH!
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下方區域：完全移除了 scanlines 效果，保持純淨高對比，利於閱讀 -->
+            <div class="h-[212px] bg-stone-800 p-4 flex flex-col justify-between">
+                
+                <!-- 問答面板上方狀態欄 -->
+                <div class="flex justify-between items-center bg-stone-950 px-4 py-2 rounded-xl border border-stone-700">
+                    <div class="flex items-center gap-2">
+                        <span class="text-stone-400 text-sm font-bold" data-zh="🗺️ 逃生進度：" data-en="🗺️ Evacuation Progress:">🗺️ 逃生進度：</span>
+                        <div id="progress-dots" class="flex gap-2">
+                            <!-- 由 JS 動態生成進度方格 -->
+                        </div>
+                    </div>
+                    <div class="text-stone-400 text-xs font-bold">
+                        FPS: 60 | ENGINE: PIXEL CANVAS 2D
+                    </div>
+                </div>
+
+                <!-- 核心問答與提示內容 -->
+                <div class="flex-grow mt-3 relative flex items-center justify-center">
+                    
+                    <!-- 1. 跑酷進行中提示 -->
+                    <div id="hint-running" class="text-center flex flex-col items-center justify-center py-2 animate-pulse">
+                        <div class="flex items-center gap-3 text-amber-400 font-black text-xl mb-1">
+                            <i class="fa-solid fa-spinner animate-spin"></i>
+                            <span data-zh="前方不遠處有坍方，加速逃跑中..." data-en="Landslide ahead, running to safety...">前方不遠處有坍方，加速逃跑中...</span>
+                        </div>
+                        <p class="text-stone-400 text-sm font-semibold" data-zh="請注意：雷雨天氣，請小心後方步步逼近的泥沙巨浪！" data-en="Warning: Heavy rainstorm! Watch out for the approaching mudslide!">請注意：雷雨天氣，請小心後方步步逼近的泥沙巨浪！</p>
+                    </div>
+
+                    <!-- 2. 高清問答主面板 - 精緻高對比 -->
+                    <div id="panel-quiz" class="hidden absolute inset-0 bg-white rounded-xl border-4 border-amber-800 p-3.5 shadow-2xl flex gap-4">
+                        <div class="w-[55%] flex flex-col justify-between">
+                            <div>
+                                <span class="inline-block bg-amber-800 text-white font-black text-xs px-3 py-1 rounded shadow-sm mb-1.5">
+                                    <span data-zh="第" data-en="Quiz">第</span> <span id="quiz-index-num">1</span> <span data-zh="關問答" data-en="of 6">關問答</span>
+                                </span>
+                                <!-- 大尺寸、高對比的清晰題目欄 -->
+                                <h3 id="quiz-question-text" class="text-stone-950 font-black text-lg md:text-xl leading-snug tracking-wide">
+                                    加載中...
+                                </h3>
+                            </div>
+                            <!-- 探險筆記提示 -->
+                            <div class="bg-amber-50 border-l-4 border-amber-600 p-2.5 rounded text-xs text-amber-950 font-bold">
+                                <i class="fa-solid fa-lightbulb text-amber-600 animate-bounce"></i> 
+                                <strong data-zh="防災秘笈：" data-en="Survival Tip:">防災秘笈：</strong> <span id="quiz-hint-text">提示文字</span>
+                            </div>
+                        </div>
+                        <div class="w-[45%] flex flex-col justify-center gap-2.5" id="quiz-options-container">
+                            <!-- JS 動態生成，支援 1, 2, 3 鍵盤按鍵作答 -->
+                        </div>
+                    </div>
+
+                    <!-- 3. 回饋解析面板 - 自動逃生秒數倒數，此時計時器暫停 -->
+                    <div id="panel-feedback" class="hidden absolute inset-0 rounded-xl p-3 flex items-center justify-between shadow-2xl border-4 z-20">
+                        <div class="flex items-center gap-4 w-full">
+                            <div id="feedback-icon" class="w-14 h-14 rounded-full flex items-center justify-center text-3xl text-white shadow-md flex-shrink-0 animate-bounce">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                            <div class="flex-grow">
+                                <h4 id="feedback-title-text" class="text-2xl font-black mb-1">答對了！</h4>
+                                <p id="feedback-desc-text" class="text-sm font-bold leading-normal text-stone-800"></p>
+                            </div>
+                            <!-- 自動倒數回到跑酷提示 -->
+                            <div class="text-right flex-shrink-0 pr-4 border-l border-stone-400 pl-4">
+                                <span class="text-xs font-bold text-stone-600 block mb-0.5" data-zh="自動逃生中" data-en="Auto-Running">自動逃生中</span>
+                                <span class="pixel-font text-red-600 text-xl font-black animate-pulse" id="feedback-countdown">1.5s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- 街機底部控制台 (模擬實體搖桿與按鈕) -->
+        <div class="h-[60px] bg-stone-950 border-t-8 border-stone-900 flex items-center justify-between px-10">
+            <!-- 模擬搖桿 -->
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-red-600 border-4 border-stone-800 shadow-[inset_0_3px_5px_rgba(255,255,255,0.4)] relative">
+                    <div class="absolute top-1 left-1 w-2 h-2 bg-white rounded-full opacity-60"></div>
+                </div>
+                <span class="pixel-font text-stone-500 text-[10px]">JOYSTICK CONTROL</span>
+                <span class="text-stone-400 text-xs font-bold border border-stone-700 px-2 py-0.5 rounded ml-2" data-zh="⌨️ 鍵盤可用 1, 2, 3 鍵作答" data-en="⌨️ Press 1, 2, 3 to Answer">⌨️ 鍵盤可用 1, 2, 3 鍵作答</span>
+            </div>
+            <!-- 擬真投幣口 -->
+            <div class="flex gap-4">
+                <div class="w-20 h-8 bg-stone-800 border-2 border-stone-600 rounded flex items-center justify-center shadow-inner">
+                    <div class="w-1 h-5 bg-amber-500 rounded animate-pulse"></div>
+                    <span class="text-[9px] text-stone-400 font-bold ml-1.5">COIN ENTRY</span>
+                </div>
+                <div class="w-20 h-8 bg-stone-800 border-2 border-stone-600 rounded flex items-center justify-center shadow-inner">
+                    <span class="text-[9px] text-green-500 font-extrabold animate-pulse">SYSTEM OK</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結算畫面 (含班級排行榜) -->
+        <div id="end-screen" class="hidden absolute inset-0 bg-stone-950/95 z-50 flex flex-col items-center justify-center p-6">
+            <div class="flex w-full max-w-[1000px] gap-6 items-center">
+                <!-- 左側：個人成績 -->
+                <div class="flex-grow flex flex-col items-center text-center">
+                    <div class="mb-2">
+                        <i id="end-trophy" class="fa-solid fa-trophy text-yellow-400 text-7xl drop-shadow-[0_0_20px_rgba(250,204,21,0.5)] animate-bounce"></i>
+                    </div>
+                    <h2 id="end-title" class="pixel-font text-xl md:text-2xl font-black text-green-400 tracking-wider mb-1">
+                        CLEAR! / 成功抵達！
+                    </h2>
+                    <p id="end-subtitle" class="text-stone-300 text-base font-bold mb-4">順利抵達安全避難所！</p>
+                    
+                    <div class="bg-stone-800 border-4 border-stone-700 rounded-2xl p-4 w-full shadow-2xl text-center mb-4">
+                        <div class="text-stone-400 font-bold text-xs mb-0.5" data-zh="總逃生時間 (TOTAL TIME)" data-en="TOTAL ESCAPE TIME">總逃生時間 (TOTAL TIME)</div>
+                        <div id="end-score" class="pixel-font text-4xl font-black text-amber-500 tracking-widest">100</div>
+                        <div class="border-t border-stone-700 my-3"></div>
+                        <div id="end-evaluation" class="text-xs text-stone-200 leading-relaxed text-left h-[100px] overflow-y-auto">
+                            評語讀取中...
+                        </div>
+                    </div>
+
+                    <button onclick="resetGame()" class="px-8 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xl rounded-xl border-b-6 border-emerald-800 active:scale-95 transition-all flex items-center gap-3">
+                        <i class="fa-solid fa-rotate-left"></i> <span data-zh="再應戰一次 (RETRY)" data-en="Play Again (RETRY)">再應戰一次 (RETRY)</span>
+                    </button>
+                </div>
+
+                <!-- 右側：任務交接與老師確認面板 (Teacher Confirmation & Handover Panel) -->
+                <div class="w-[380px] bg-stone-900 border-4 border-amber-600 rounded-3xl p-6 flex flex-col justify-between h-[390px] shadow-2xl">
+                    <div>
+                        <h3 class="pixel-font text-amber-400 text-sm font-bold text-center mb-4 border-b-2 border-stone-700 pb-2.5 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-clipboard-check animate-pulse"></i> 
+                            <span data-zh="🏆 任務完成與交接" data-en="🏆 Mission Handover">🏆 任務完成與交接</span>
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <!-- 步驟一：給老師確認 -->
+                            <div class="bg-stone-950 p-3 rounded-xl border border-stone-800 flex gap-3 items-start">
+                                <span class="bg-amber-500 text-stone-950 font-black rounded-lg w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">1</span>
+                                <p class="text-xs font-bold text-stone-200 leading-normal" 
+                                   data-zh="請先將左側的「總逃生時間」秀給老師看，確認登記完成喔！" 
+                                   data-en="Please show your final escape time on the left to the teacher for confirmation and recording!">
+                                    請先將左側的「總逃生時間」秀給老師看，確認登記完成喔！
+                                </p>
+                            </div>
+
+                            <!-- 步驟二：呼叫高年級交接 -->
+                            <div class="bg-stone-950 p-3 rounded-xl border border-stone-800 flex gap-3 items-start animate-pulse">
+                                <span class="bg-emerald-500 text-stone-950 font-black rounded-lg w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">2</span>
+                                <p class="text-xs font-bold text-stone-100 leading-normal" 
+                                   data-zh="接著，請大聲呼叫你的「高年級小幫手」過來交接平板，進行最後的高階任務！" 
+                                   data-en="Next, please call a 'Senior Helper' to take over this tablet and complete the final high-grade task!">
+                                    接著，請大聲呼叫你的「高年級小幫手」過來交接平板，進行最後的高階任務！
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 交接示意動畫圖示 -->
+                    <div class="flex justify-center items-center gap-6 py-2 border-t border-b border-stone-800 my-2">
+                        <i class="fa-solid fa-child text-sky-400 text-3xl"></i>
+                        <i class="fa-solid fa-right-long text-amber-500 text-2xl animate-ping"></i>
+                        <i class="fa-solid fa-child-reaching text-emerald-400 text-3xl"></i>
+                    </div>
+
+                    <!-- 準備交接按鈕 -->
+                    <button onclick="resetGame()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-sm rounded-xl border-b-4 border-amber-700 active:translate-y-0.5 active:border-b-0 transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-mobile-screen"></i>
+                        <span data-zh="登記完成，準備交接給高年級" data-en="Recorded! Ready to hand over ➔">登記完成，準備交接給高年級</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 遊戲主引擎程式碼 -->
+    <script>
+        // 一鍵雙語資料庫（完整翻譯，極大提升國際性指標）
+        let currentLanguage = 'zh';
+
+        const localization = {
+            zh: {
+                startDesc: "轟隆隆！大雨不停下，可怕的泥石流就要衝下來了！<br>快操作探險家一邊回答防災問題，一邊往高處逃生！答錯會被落石砸中並增加時間喔！<br><strong class='text-yellow-400'>【競速目標：用最少秒數抵達終點避難所者獲勝！】</strong>",
+                correctTitle: "太厲害了！完全答對！",
+                wrongTitle: "答錯了！【逃生時間 +3秒】",
+                wrongDesc: "哎呀！不小心答錯，引發山上落石，砸中小杰多花了 3 秒避難！\n\n",
+                evalGoldTitle: "🥇 超級防災特攻神速王！",
+                evalGoldDesc: "<strong>神速評價：</strong><br>太不可思議了！你僅用了 <strong>{time} 秒</strong> 就安全無恙地抵達避難小屋！一路上對防災避難包、廣播警訊等觀念滾瓜爛熟，是當之無愧的防災大師！趕快把成績秀給你的同學看，挑戰誰才是全班第一速逃生王吧！",
+                evalSilverTitle: "🥈 安全撤離菁英！",
+                evalSilverDesc: "<strong>菁英評價：</strong><br>非常出色！你花了 <strong>{time} 秒</strong> 順利通過重重考驗。雖然途中偶爾有一兩次不小心答錯被落石砸中耽誤了 3 秒，但你強大的臨場反應能力依舊讓你迅速抵達收容所。再挑戰一次，把失誤歸零就能奪下神速王喔！",
+                evalBronzeTitle: "🥉 安全平安抵達！",
+                evalBronzeDesc: "<strong>平安評價：</strong><br>總計花費 <strong>{time} 秒</strong>。這次挑戰因為對某些防災知識（如手機預警、家庭防災卡等）不夠熟悉，不小心被多顆滾石砸中，增加了不少懲罰秒數，差點就被泥石流趕上了。沒關係，防災最重要的是記住正確自保方法，再玩一次提升你的秒數速度吧！"
+            },
+            en: {
+                startDesc: "Rumble! The heavy rain won't stop, and a dangerous mudslide is rushing down!<br>Help the explorer escape by answering disaster prevention questions! Wrong answers trigger falling rocks and add a 3-second penalty!<br><strong class='text-yellow-400'>【Goal: Reach the shelter in the shortest time!】</strong>",
+                correctTitle: "Amazing! Perfectly Correct!",
+                wrongTitle: "Incorrect! [+3s Penalty]",
+                wrongDesc: "Oops! An incorrect answer caused falling rocks, costing Steve a 3-second delay!\n\n",
+                evalGoldTitle: "🥇 Elite Speed Champion!",
+                evalGoldDesc: "<strong>Speedrun Rating:</strong><br>Incredible! You reached the shelter in just <strong>{time} seconds</strong>! You know emergency kits and warning systems perfectly. Show your score to classmates and see who's the fastest!",
+                evalSilverTitle: "🥈 Evacuation Elite!",
+                evalSilverDesc: "<strong>Elite Rating:</strong><br>Great job! You took <strong>{time} seconds</strong>. Although you got hit by falling rocks occasionally (3-sec penalty), your reflexes brought you to safety. Try again for a perfect run!",
+                evalBronzeTitle: "🥉 Safety Arrival!",
+                evalBronzeDesc: "<strong>Survival Rating:</strong><br>Total time: <strong>{time} seconds</strong>. You were delayed by rockfalls due to a few wrong answers. Practice more to learn life-saving safety skills and improve your time!"
+            }
+        };
+
+        // 完整 10 題問答題庫（增加隨機性與重玩性）
+        const completeQuizPool = [
+            {
+                questionZh: "影片中提到，土石流在流動時像是在山坡上的比賽，主要會攜帶什麼衝下來？",
+                questionEn: "What does a debris flow mainly carry down the slope as mentioned in the video?",
+                optionsZh: [
+                    { text: "A. 大大小小的石頭與泥巴", correct: true },
+                    { text: "B. 精緻好吃的糖果與玩具", correct: false },
+                    { text: "C. 緩慢吹過山坡的微風", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Rocks and mud of all sizes", correct: true },
+                    { text: "B. Candies and toys", correct: false },
+                    { text: "C. Gentle mountain breeze", correct: false }
+                ],
+                tipZh: "土石流主要是由山壁上的土砂碎石與雨水混和而成的喔！",
+                tipEn: "Debris flows are composed of loose soil, rocks, and water on slopes!",
+                hintZh: "土石流會攜帶碎石、樹木和泥土，下沖威力極大，要立刻避難！",
+                hintEn: "Debris flows carry heavy rocks and logs with destructive power. Evacuate immediately!"
+            },
+            {
+                questionZh: "在什麼樣的天氣狀況下，山區最容易暴發可怕的土石流？",
+                questionEn: "Under what weather conditions are debris flows most likely to occur in mountain areas?",
+                optionsZh: [
+                    { text: "A. 大太陽好天氣的夏天", correct: false },
+                    { text: "B. 連日大雨或短時間的大暴雨", correct: true },
+                    { text: "C. 只有颳著涼風卻完全沒雨", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Sunny summer days", correct: false },
+                    { text: "B. Continuous heavy rain or short-term storms", correct: true },
+                    { text: "C. Cool wind without rain", correct: false }
+                ],
+                tipZh: "大量雨水會滲入泥土中，使土壤變軟、變重而失去黏性！",
+                tipEn: "Heavy rain saturates and loosens the soil on slopes!",
+                hintZh: "大雨使土壤變重變軟，在大雨沖刷下極容易暴發土石流。",
+                hintEn: "Saturated soil becomes heavy and unstable, easily triggered by heavy downpours."
+            },
+            {
+                questionZh: "當手機或電視彈出「土石流警示訊息」時，這代表著什麼意義？",
+                questionEn: "What does it mean when your phone or TV pops up a 'Debris Flow Warning'?",
+                optionsZh: [
+                    { text: "A. 代表一定會發生土石流", correct: false },
+                    { text: "B. 代表土石流已經完全結束了", correct: false },
+                    { text: "C. 代表「可能」會發生，必須提高警覺", correct: true }
+                ],
+                optionsEn: [
+                    { text: "A. It means a debris flow will definitely happen", correct: false },
+                    { text: "B. It means the debris flow has completely ended", correct: false },
+                    { text: "C. It means it 'might' occur; we must stay alert", correct: true }
+                ],
+                tipZh: "這是防災警訊，並非絕對發生，而是提醒我們要時時刻刻保持警覺喔！",
+                tipEn: "Warnings indicate potential risks, raising our readiness!",
+                hintZh: "警示訊息是代表有風險，提醒大家可能發生。即使沒收到，在山區暴雨時也要警覺！",
+                hintEn: "Warnings signal potential danger. Always remain vigilant during heavy rainstorms!"
+            },
+            {
+                questionZh: "若沒帶手機或電視，在村子裡通常還可以透過什麼方式得知土石流預警？",
+                questionEn: "Without a phone or TV, how can villagers usually receive warning alerts?",
+                optionsZh: [
+                    { text: "A. 聽到村里長的廣播或通訊電話", correct: true },
+                    { text: "B. 學校鐘聲或者是小喇叭", correct: false },
+                    { text: "C. 在樹林裡玩躲貓貓的聲音", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Hearing village chief broadcasts or phone calls", correct: true },
+                    { text: "B. School bells or tiny trumpets", correct: false },
+                    { text: "C. Shouting while playing hide-and-seek", correct: false }
+                ],
+                tipZh: "村里辦公室通常設有廣播喇叭可以讓全村都聽見！",
+                tipEn: "Village offices use broadcast speaker systems to warn residents.",
+                hintZh: "村里長會使用廣播系統，或是直接打電話聯絡，提醒大家做好避難準備！",
+                hintEn: "Village chiefs utilize public broadcasts or phone calls to initiate evacuation."
+            },
+            {
+                questionZh: "為了在緊急時快速撤離，我們平常在家就應該和家人準備哪種「求生法寶」？",
+                questionEn: "What ' survival kit' should we prepare at home to evacuate quickly?",
+                optionsZh: [
+                    { text: "A. 書包，放進所有的故事書與彩色筆", correct: false },
+                    { text: "B. 「緊急避難包」，放水、乾糧、手電筒和哨子", correct: true },
+                    { text: "C. 玩具箱，裝滿布偶與掌上型遊樂器", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Schoolbag with storybooks and color pens", correct: false },
+                    { text: "B. 'Emergency Kit' with water, food, flashlight, and whistle", correct: true },
+                    { text: "C. Toy box with dolls and portable consoles", correct: false }
+                ],
+                tipZh: "快速逃生時，維持生命、照明和發出聲音求救最重要！",
+                tipEn: "Pack absolute essentials for hydration, light, and signaling help.",
+                hintZh: "避難包內必須備有礦泉水、高熱量乾糧、照亮道路的手電筒與求救用哨子。",
+                hintEn: "An emergency kit should store water, food, a flashlight, and a whistle."
+            },
+            {
+                questionZh: "撤離時，如果發現家裡剛好沒有大人在，小朋友應該怎麼做最勇敢正確？",
+                questionEn: "During evacuation, if no adults are home, what should children do?",
+                optionsZh: [
+                    { text: "A. 利用「家庭防災卡」聯絡，或尋求警察或消防隊協助", correct: true },
+                    { text: "B. 躲在房間衣櫥裡，等大人回家", correct: false },
+                    { text: "C. 一個人跑到更深的山林谷地冒險", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Use the 'Family Disaster Card' or contact police/firefighters", correct: true },
+                    { text: "B. Hide inside a closet and wait for adults", correct: false },
+                    { text: "C. Run deeper into mountain valleys alone", correct: false }
+                ],
+                tipZh: "冷靜查看我們平時寫在防災手冊上的卡片，尋求鄰居或專業人員幫忙！",
+                tipEn: "Refer to contacts on your card and seek help from local responders.",
+                hintZh: "利用家庭防災卡找到聯絡方式，並主動尋求村里長、警察或消防隊的撤離引導！",
+                hintEn: "Use your disaster card to contact family, or seek help from chiefs/first responders."
+            },
+            {
+                questionZh: "「家庭防災卡」上面最主要應該寫著什麼樣的關鍵資訊？",
+                questionEn: "What key information should be written on the 'Family Disaster Card'?",
+                optionsZh: [
+                    { text: "A. 昨天的聯絡簿與數學作業分數", correct: false },
+                    { text: "B. 家人的名字與緊急聯絡電話、約定避難地點", correct: true },
+                    { text: "C. 自己最喜歡的明星和卡通人物名稱", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Yesterday's homework and math scores", correct: false },
+                    { text: "B. Family names, emergency contacts, and evacuation spot", correct: true },
+                    { text: "C. Favorite pop stars or cartoon characters", correct: false }
+                ],
+                tipZh: "這是當家人在災害中走散時，用來重聚和聯絡的核心卡片！",
+                tipEn: "This card helps family members reconnect if separated during a disaster.",
+                hintZh: "防災卡應寫上家長聯絡電話與指定避難地點，隨身攜帶或貼在避難包上！",
+                hintEn: "It stores names, contact numbers, and rendezvous locations for quick reunion."
+            },
+            {
+                questionZh: "在社區或村子裡，我們去哪裡可以看到「防災地圖」？它的主要功能是什麼？",
+                questionEn: "Where can we find the 'Disaster Map' and what is its main function?",
+                optionsZh: [
+                    { text: "A. 告訴我們哪裡有安全的避難收容所和逃生路線", correct: true },
+                    { text: "B. 指引我們去遊樂園和玩具店的最快路線", correct: false },
+                    { text: "C. 用來當作畫畫課的草稿紙", correct: false }
+                ],
+                optionsEn: [
+                    { text: "A. Showing safe shelters and evacuation routes", correct: true },
+                    { text: "B. Guide to amusement parks and toy shops", correct: false },
+                    { text: "C. Used as scratch paper for drawing class", correct: false }
+                ],
+                tipZh: "防災地圖會用綠色避難標示指出安全的避難收容中心！",
+                tipEn: "Disaster maps indicate safe shelter locations with green running figures.",
+                hintZh: "防災地圖明確標示了社區的安全避難點與危險警戒區，平時就應和家人熟悉路線！",
+                hintEn: "It shows safe gathering spots and danger zones. Review it with family regularly!"
+            }
+        ];
+
+        // 儲存當前隨機抽選出的 6 題
+        let quizList = [];
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 550;
+        const GAME_HEIGHT = 190;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+        ctx.imageSmoothingEnabled = false;
+
+        const PALETTE = {
+            'Y': '#fbbf24', 'S': '#fdba74', 'O': '#38bdf8', 'R': '#ef4444', 'B': '#1d4ed8', 
+            'D': '#0f172a', 'W': '#ffffff', 'G': '#4ade80', 'g': '#15803d', 'M': '#7c2d12', 
+            'm': '#451a03', 'C': '#94a3b8', 'T': '#16a34a', 't': '#14532d', 'A': '#22d3ee',
+        };
+
+        const SPRITES = {
+            playerRun1: [
+                "____YYYY____", "___YYYYYY___", "___YDDSSDY__", "____SSSSS___", "___ROOOOR___",
+                "__RROOOORR__", "__RROOOORR__", "___OOOOOO___", "____BBBB____", "___B____B___", "___D____D___",
+            ],
+            playerRun2: [
+                "____YYYY____", "___YYYYYY___", "___YDDSSDY__", "____SSSSS___", "___ROOOOR___",
+                "__RROOOORR__", "__RROOOORR__", "___OOOOOO___", "____BBBB____", "____B_B____", "____D_D____",
+            ],
+            playerRun3: [
+                "____YYYY____", "___YYYYYY___", "___YDDSSDY__", "____SSSSS___", "___ROOOOR___",
+                "__RROOOORR__", "__RROOOORR__", "___OOOOOO___", "____BBBB____", "___B____B___", "___D____D___",
+            ],
+            playerJump: [
+                "____YYYY____", "___YYYYYY___", "___YDDSSDY__", "____SSSSS___", "___ROOOOR___",
+                "__RROOOORR__", "__RROOOORR__", "___OOOOOO___", "____BBBB____", "___BD_DB____", "____________",
+            ],
+            tree: [
+                "_____TT_____", "____TTTT____", "___TTttTT___", "__TTttttTT__", "_TTttttttTT_", "____DDDD____", "____DDDD____",
+            ],
+            shelter: [
+                "______RR______", "____RRRRRR____", "__RRRRRRRRRR__", "RRRRRRRRRRRRRR",
+                "_WWWWWWWWWWWW_", "_WWDDWWWWDDWW_", "_WWDDWWWWDDWW_", "_WWWWWWWWWWWW_",
+            ]
+        };
+
+        function drawPixelSprite(spriteArray, startX, startY, pixelSize = 2) {
+            spriteArray.forEach((row, rIdx) => {
+                for (let cIdx = 0; cIdx < row.length; cIdx++) {
+                    const char = row[cIdx];
+                    if (char !== '_') {
+                        ctx.fillStyle = PALETTE[char] || '#000000';
+                        ctx.fillRect(startX + (cIdx * pixelSize), startY + (rIdx * pixelSize), pixelSize, pixelSize);
+                    }
+                }
+            });
+        }
+
+        let state = {
+            currentQuizIndex: 0,
+            elapsedTime: 0,     // 累計逃生時間
+            lastTime: 0,        // 高精度計時器
+            distance: 60,       // 與土石流距離
+            isRunning: false,
+            gameStarted: false,
+            gameEnded: false,
+            playerY: 130,
+            playerYVelocity: 0,
+            bgScroll: 0,
+            rainTicks: [],
+            debrisList: [],
+            screenShake: 0,
+            lightningFlash: 0,
+            shelterX: GAME_WIDTH + 100,
+            gameFrameCount: 0,
+            isDashing: false,
+            dashTimer: 0,
+            playerHurtTimer: 0,
+            rockEffect: null,
+            popupTexts: [],
+            feedbackTimer: null
+        };
+
+        function initRain() {
+            state.rainTicks = [];
+            for (let i = 0; i < 30; i++) {
+                state.rainTicks.push({
+                    x: Math.random() * GAME_WIDTH,
+                    y: Math.random() * GAME_HEIGHT,
+                    speed: 4 + Math.random() * 4
+                });
+            }
+        }
+
+        function initDebris() {
+            state.debrisList = [
+                { x: 20, y: 110, size: 8, speed: 1.5, type: 'rock', rot: 0 },
+                { x: 50, y: 140, size: 12, speed: 1, type: 'wood', rot: 0 },
+                { x: 10, y: 155, size: 6, speed: 2, type: 'rock', rot: 0 }
+            ];
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            if (state.lightningFlash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${state.lightningFlash})`;
+                ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                state.lightningFlash -= 0.1;
+            }
+
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(100 - (state.bgScroll * 0.1) % (GAME_WIDTH + 100), 20, 50, 10);
+            ctx.fillRect(120 - (state.bgScroll * 0.1) % (GAME_WIDTH + 100), 16, 40, 14);
+
+            ctx.fillStyle = '#0f172a';
+            for (let i = 0; i < GAME_WIDTH + 40; i += 20) {
+                const shiftX = (i - (state.bgScroll * 0.4)) % (GAME_WIDTH + 40);
+                ctx.beginPath();
+                ctx.moveTo(shiftX, 160);
+                ctx.lineTo(shiftX + 20, 120);
+                ctx.lineTo(shiftX + 40, 160);
+                ctx.fill();
+            }
+
+            for (let i = 0; i < GAME_WIDTH + 100; i += 120) {
+                const shiftX = (i - (state.bgScroll * 0.8)) % (GAME_WIDTH + 120);
+                drawPixelSprite(SPRITES.tree, shiftX, 115, 1.5);
+            }
+
+            const blockSize = 16;
+            const scrollOffset = (state.bgScroll) % blockSize;
+            for (let col = -1; col < (GAME_WIDTH / blockSize) + 1; col++) {
+                const x = (col * blockSize) - scrollOffset;
+                const y = 160;
+                ctx.fillStyle = PALETTE['G'];
+                ctx.fillRect(x, y, blockSize, 4);
+                ctx.fillStyle = PALETTE['g'];
+                ctx.fillRect(x, y + 4, blockSize, 2);
+                ctx.fillStyle = PALETTE['M'];
+                ctx.fillRect(x, y + 6, blockSize, blockSize - 6);
+            }
+
+            ctx.fillStyle = PALETTE['A'];
+            state.rainTicks.forEach(tick => {
+                ctx.fillRect(tick.x, tick.y, 1.5, 6);
+                if (state.isRunning) {
+                    tick.y += tick.speed;
+                    tick.x -= 1.5; 
+                } else {
+                    tick.y += tick.speed * 0.3; 
+                }
+                if (tick.y > GAME_HEIGHT) {
+                    tick.y = -10;
+                    tick.x = Math.random() * GAME_WIDTH;
+                }
+            });
+        }
+
+        function drawMudMonster() {
+            const playerX = 260;
+            const baseMudWidth = 20;
+            const maxMudWidth = playerX - 25; 
+            const distanceRatio = (100 - state.distance) / 90; 
+            const mudWidth = Math.max(20, baseMudWidth + (maxMudWidth - baseMudWidth) * distanceRatio);
+            
+            const waveAmplitude = state.distance < 40 ? 7 : 4; 
+            const waveFreq = 0.08;
+            const timeFactor = state.gameFrameCount * 0.2;
+
+            ctx.fillStyle = PALETTE['M'];
+            ctx.beginPath();
+            ctx.moveTo(0, GAME_HEIGHT);
+            for (let y = 70; y <= GAME_HEIGHT; y += 4) {
+                const waveX = mudWidth + Math.sin(y * waveFreq + timeFactor) * waveAmplitude;
+                ctx.lineTo(waveX, y);
+            }
+            ctx.lineTo(0, GAME_HEIGHT);
+            ctx.fill();
+
+            ctx.fillStyle = PALETTE['m'];
+            for (let y = 70; y <= GAME_HEIGHT; y += 4) {
+                const waveX = mudWidth + Math.sin(y * waveFreq + timeFactor) * waveAmplitude;
+                ctx.fillRect(waveX - 6, y, 6, 4);
+            }
+
+            state.debrisList.forEach(deb => {
+                ctx.save();
+                ctx.translate(deb.x, deb.y);
+                ctx.rotate(deb.rot);
+                if (deb.type === 'rock') {
+                    ctx.fillStyle = PALETTE['D'];
+                    ctx.fillRect(-deb.size/2, -deb.size/2, deb.size, deb.size);
+                } else {
+                    ctx.fillStyle = '#7c2d12';
+                    ctx.fillRect(-deb.size, -deb.size/3, deb.size * 2, deb.size/1.5);
+                }
+                ctx.restore();
+                if (state.isRunning) {
+                    deb.rot += 0.06;
+                    deb.x = (deb.x + 0.4) % (mudWidth + 15);
+                }
+            });
+
+            if (state.distance < 40 && state.isRunning) {
+                ctx.fillStyle = PALETTE['M'];
+                for (let i = 0; i < 6; i++) {
+                    const particleX = mudWidth + (Math.sin(state.gameFrameCount * 0.1 + i) + 1) * 20;
+                    const particleY = 120 + (i * 8) % 40;
+                    ctx.fillRect(particleX, particleY, 2.5, 2.5);
+                }
+            }
+
+            if (state.distance < 35) {
+                const pulseAlpha = Math.abs(Math.sin(state.gameFrameCount * 0.15)) * 0.25;
+                ctx.fillStyle = `rgba(239, 68, 68, ${pulseAlpha})`;
+                ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            }
+        }
+
+        function drawPlayer() {
+            let sprite = SPRITES.playerRun1;
+            if (state.playerY < 130) {
+                sprite = SPRITES.playerJump;
+            } else if (state.isRunning) {
+                const animSpeed = state.isDashing ? 4 : 8;
+                const frameIndex = Math.floor(state.gameFrameCount / animSpeed) % 3;
+                if (frameIndex === 0) sprite = SPRITES.playerRun1;
+                else if (frameIndex === 1) sprite = SPRITES.playerRun2;
+                else sprite = SPRITES.playerRun3;
+            }
+
+            const playerX = 260;
+            const playerPixelSize = 2.2;
+            
+            const originalO = PALETTE['O'];
+            const originalS = PALETTE['S'];
+            if (state.playerHurtTimer > 0) {
+                if (Math.floor(state.playerHurtTimer / 4) % 2 === 0) {
+                    PALETTE['O'] = '#ef4444'; 
+                    PALETTE['S'] = '#fca5a5'; 
+                }
+            }
+
+            drawPixelSprite(sprite, playerX, state.playerY, playerPixelSize);
+            PALETTE['O'] = originalO;
+            PALETTE['S'] = originalS;
+        }
+
+        function drawShelter() {
+            if (state.shelterX < GAME_WIDTH + 200) {
+                drawPixelSprite(SPRITES.shelter, state.shelterX, 120, 3);
+            }
+        }
+
+        function drawEffects() {
+            if (state.rockEffect) {
+                state.rockEffect.progress += 0.04;
+                const p = state.rockEffect.progress;
+                const rx = state.rockEffect.x + (state.rockEffect.targetX - state.rockEffect.x) * p;
+                const ry = state.rockEffect.y + (state.rockEffect.targetY - state.rockEffect.y) * p - Math.sin(p * Math.PI) * 50;
+
+                ctx.fillStyle = '#7c2d12';
+                ctx.fillRect(rx, ry, 6, 6);
+                if (p >= 1) {
+                    state.screenShake = 15;
+                    state.playerHurtTimer = 40; 
+                    state.rockEffect = null;
+                }
+            }
+
+            state.popupTexts.forEach(pt => {
+                ctx.fillStyle = pt.color;
+                ctx.font = 'bold 9px "Press Start 2P", sans-serif';
+                ctx.fillText(pt.text, pt.x - 30, pt.y);
+                pt.y -= 0.6; 
+                pt.life--;
+            });
+            state.popupTexts = state.popupTexts.filter(pt => pt.life > 0);
+        }
+
+        function gameLoop() {
+            state.gameFrameCount++;
+            const now = performance.now();
+            if (!state.lastTime) state.lastTime = now;
+            const dt = (now - state.lastTime) / 1000;
+            state.lastTime = now;
+
+            // ⚠️ 答題時時間「繼續流逝」，但「回饋展示時暫停計時」，兼顧刺激性與教育反思！
+            if (state.gameStarted && !state.gameEnded && (state.isRunning || document.getElementById('panel-quiz').style.display !== 'none' || document.getElementById('panel-feedback').style.display === 'none')) {
+                state.elapsedTime += dt;
+                document.getElementById('hud-score').innerText = state.elapsedTime.toFixed(1) + "s";
+            }
+
+            ctx.save();
+            const baseShake = state.distance < 30 ? 1.5 : (state.distance < 50 ? 0.6 : 0);
+            const totalShake = state.screenShake + baseShake;
+            if (totalShake > 0) {
+                const shakeX = (Math.random() - 0.5) * totalShake;
+                const shakeY = (Math.random() - 0.5) * totalShake;
+                ctx.translate(shakeX, shakeY);
+                state.screenShake *= 0.9; 
+                if (state.screenShake < 0.2) state.screenShake = 0;
+            }
+
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            drawBackground();
+            drawShelter();
+            drawPlayer();
+            drawMudMonster();
+            drawEffects(); 
+            ctx.restore();
+
+            if (state.playerHurtTimer > 0) state.playerHurtTimer--;
+
+            if (state.isRunning) {
+                state.bgScroll += state.isDashing ? 6 : 2;
+                if (state.playerY < 130) {
+                    state.playerY += state.playerYVelocity;
+                    state.playerYVelocity += 0.8; 
+                } else {
+                    state.playerY = 130;
+                    state.playerYVelocity = 0;
+                }
+                if (state.isDashing) {
+                    state.dashTimer--;
+                    if (state.dashTimer <= 0) {
+                        state.isDashing = false;
+                        document.getElementById('dash-overlay').classList.add('hidden');
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        let audioCtx = null;
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(550, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                } else if (type === 'correct') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.12);
+                    osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.24);
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(70, audioCtx.currentTime + 0.35);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+                } else if (type === 'rumble') {
+                    const bufferSize = audioCtx.sampleRate * 1.2;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(100, audioCtx.currentTime);
+                    noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime); noise.start(); noise.stop(audioCtx.currentTime + 1.0);
+                } else if (type === 'jump') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.12, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                }
+            } catch (e) { console.warn(e); }
+        }
+
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh';
+            document.getElementById('lang-btn-text').innerText = currentLanguage === 'zh' ? 'English' : '繁體中文';
+            updateStaticText();
+            if (!state.gameStarted) loadStartScreenText();
+            if (state.gameStarted && !state.isRunning && !state.gameEnded) {
+                // 如果在答題中，即時更新當前題目語言
+                const curQuiz = quizList[state.currentQuizIndex];
+                document.getElementById('quiz-question-text').innerText = currentLanguage === 'zh' ? curQuiz.questionZh : curQuiz.questionEn;
+                document.getElementById('quiz-hint-text').innerText = currentLanguage === 'zh' ? curQuiz.tipZh : curQuiz.tipEn;
+                renderOptions(curQuiz);
+            }
+        }
+
+        function updateStaticText() {
+            document.querySelectorAll('[data-zh]').forEach(el => {
+                el.innerText = currentLanguage === 'zh' ? el.getAttribute('data-zh') : el.getAttribute('data-en');
+            });
+        }
+
+        function loadStartScreenText() {
+            document.getElementById('start-desc').innerHTML = localization[currentLanguage].startDesc;
+        }
+
+        function renderProgressDots() {
+            const container = document.getElementById('progress-dots');
+            container.innerHTML = '';
+            for (let i = 0; i < 6; i++) {
+                const node = document.createElement('div');
+                node.className = `w-5 h-5 rounded border-2 transition-all duration-300 flex items-center justify-center font-bold text-[9px] text-white ${
+                    i < state.currentQuizIndex 
+                        ? 'bg-green-500 border-white' 
+                        : i === state.currentQuizIndex 
+                        ? 'bg-amber-500 border-white animate-pulse' 
+                        : 'bg-stone-700 border-stone-500'
+                }`;
+                if (i < state.currentQuizIndex) {
+                    node.innerHTML = '<i class="fa-solid fa-check"></i>';
+                } else {
+                    node.innerText = i + 1;
+                }
+                container.appendChild(node);
+            }
+        }
+
+        function startRunningLoop() {
+            state.isRunning = true;
+            document.getElementById('hint-running').classList.remove('hidden');
+            document.getElementById('panel-quiz').classList.add('hidden');
+            document.getElementById('panel-feedback').classList.add('hidden');
+
+            setTimeout(() => {
+                if (state.isRunning && state.currentQuizIndex < 6) {
+                    triggerQuiz();
+                }
+            }, 5000);
+        }
+
+        function triggerQuiz() {
+            state.isRunning = false;
+            document.getElementById('hint-running').classList.add('hidden');
+            document.getElementById('panel-quiz').classList.remove('hidden');
+
+            const curQuiz = quizList[state.currentQuizIndex];
+            document.getElementById('quiz-index-num').innerText = state.currentQuizIndex + 1;
+            document.getElementById('quiz-question-text').innerText = currentLanguage === 'zh' ? curQuiz.questionZh : curQuiz.questionEn;
+            document.getElementById('quiz-hint-text').innerText = currentLanguage === 'zh' ? curQuiz.tipZh : curQuiz.tipEn;
+
+            renderOptions(curQuiz);
+        }
+
+        function renderOptions(curQuiz) {
+            const optContainer = document.getElementById('quiz-options-container');
+            optContainer.innerHTML = '';
+            const opts = currentLanguage === 'zh' ? curQuiz.optionsZh : curQuiz.optionsEn;
+            opts.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "arcade-btn w-full py-2.5 px-4 bg-stone-100 hover:bg-amber-100 border-2 border-stone-400 text-stone-900 font-extrabold text-sm rounded-xl transition-all text-left flex items-center gap-2.5";
+                btn.innerHTML = `<span class="bg-amber-800 text-white w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black">${idx+1}</span> ${opt.text}`;
+                btn.onclick = () => selectAnswer(opt.correct, currentLanguage === 'zh' ? curQuiz.hintZh : curQuiz.hintEn);
+                optContainer.appendChild(btn);
+            });
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const quizPanel = document.getElementById('panel-quiz');
+            if (quizPanel.style.display !== 'none' && !quizPanel.classList.contains('hidden')) {
+                const curQuiz = quizList[state.currentQuizIndex];
+                const opts = currentLanguage === 'zh' ? curQuiz.optionsZh : curQuiz.optionsEn;
+                if (e.key === '1') selectAnswer(opts[0].correct, currentLanguage === 'zh' ? curQuiz.hintZh : curQuiz.hintEn);
+                if (e.key === '2' && opts[1]) selectAnswer(opts[1].correct, currentLanguage === 'zh' ? curQuiz.hintZh : curQuiz.hintEn);
+                if (e.key === '3' && opts[2]) selectAnswer(opts[2].correct, currentLanguage === 'zh' ? curQuiz.hintZh : curQuiz.hintEn);
+            }
+        });
+
+        function selectAnswer(isCorrect, explanation) {
+            const quizPanel = document.getElementById('panel-quiz');
+            const feedbackPanel = document.getElementById('panel-feedback');
+            const iconBox = document.getElementById('feedback-icon');
+            const titleEl = document.getElementById('feedback-title-text');
+            const descEl = document.getElementById('feedback-desc-text');
+            const distanceCard = document.getElementById('hud-distance-card');
+
+            quizPanel.classList.add('hidden');
+            feedbackPanel.classList.remove('hidden');
+
+            const textDb = localization[currentLanguage];
+
+            if (isCorrect) {
+                state.distance += 20; 
+                if (state.distance > 100) state.distance = 100;
+
+                playSound('correct');
+                state.popupTexts.push({ text: "SAFE! SPEED UP!", x: 260, y: 110, color: '#4ade80', life: 60 });
+                state.isDashing = true; state.dashTimer = 90;
+                document.getElementById('dash-overlay').classList.remove('hidden');
+
+                state.playerYVelocity = -9; state.playerY = 129; playSound('jump');
+
+                feedbackPanel.style.backgroundColor = '#d4edda';
+                feedbackPanel.style.borderColor = '#28a745';
+                iconBox.style.backgroundColor = '#28a745';
+                iconBox.innerHTML = '<i class="fa-solid fa-circle-check animate-bounce"></i>';
+                titleEl.innerText = textDb.correctTitle;
+                titleEl.className = 'text-xl font-black text-green-800 mb-0.5';
+                descEl.innerText = explanation;
+            } else {
+                state.distance -= 15; 
+                if (state.distance < 10) state.distance = 10;
+                state.elapsedTime += 3; // 懲罰：增加 3 秒逃生時間！
+
+                playSound('wrong');
+                state.rockEffect = { x: GAME_WIDTH, y: -10, targetX: 260 + 10, targetY: 130, progress: 0 };
+                state.popupTexts.push({ text: "+3s Penalty!", x: 260, y: 110, color: '#ef4444', life: 60 });
+
+                feedbackPanel.style.backgroundColor = '#f8d7da';
+                feedbackPanel.style.borderColor = '#dc3545';
+                iconBox.style.backgroundColor = '#dc3545';
+                iconBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation animate-pulse"></i>';
+                titleEl.innerText = textDb.wrongTitle;
+                titleEl.className = 'text-xl font-black text-red-800 mb-0.5';
+                descEl.innerText = textDb.wrongDesc + explanation;
+            }
+
+            document.getElementById('hud-distance').innerText = state.distance;
+            document.getElementById('hud-score').innerText = state.elapsedTime.toFixed(1) + "s";
+
+            if (state.distance < 35) {
+                distanceCard.className = "bg-red-950 px-4 py-2 rounded-xl border-4 border-red-500 flex items-center gap-3 animate-pulse";
+            } else {
+                distanceCard.className = "bg-black/80 px-4 py-2 rounded-xl border-2 border-red-500 flex items-center gap-3";
+            }
+
+            // ⚡ 答題後自動讀秒 1.5秒 後無縫返回跑酷，完美優化操作體驗
+            let countdown = 1.5;
+            const countdownEl = document.getElementById('feedback-countdown');
+            countdownEl.innerText = countdown.toFixed(1) + "s";
+
+            if (state.feedbackTimer) clearInterval(state.feedbackTimer);
+            state.feedbackTimer = setInterval(() => {
+                countdown -= 0.5;
+                if (countdown <= 0) {
+                    clearInterval(state.feedbackTimer);
+                    resumeRunning();
+                } else {
+                    countdownEl.innerText = countdown.toFixed(1) + "s";
+                }
+            }, 500);
+        }
+
+        function resumeRunning() {
+            if (state.feedbackTimer) clearInterval(state.feedbackTimer);
+            state.currentQuizIndex++;
+            renderProgressDots();
+
+            if (state.currentQuizIndex < 6) {
+                startRunningLoop();
+            } else {
+                triggerSafeShelterTransition();
+            }
+        }
+
+        function triggerSafeShelterTransition() {
+            state.isRunning = true;
+            const bannerText = currentLanguage === 'zh' 
+                ? '看見安全避難所了！全速衝刺前進！' 
+                : 'Shelter in sight! Dash to safety!';
+            document.getElementById('hint-running').innerHTML = `
+                <div class="flex items-center gap-3 text-green-400 font-black text-xl">
+                    <i class="fa-solid fa-house-shield animate-bounce"></i>
+                    <span>${bannerText}</span>
+                </div>`;
+            document.getElementById('hint-running').classList.remove('hidden');
+            document.getElementById('panel-feedback').classList.add('hidden');
+
+            state.shelterX = GAME_WIDTH + 80;
+
+            const finalDashInterval = setInterval(() => {
+                if (state.shelterX > 320) {
+                    state.shelterX -= 2;
+                } else {
+                    clearInterval(finalDashInterval);
+                    state.isRunning = false;
+                    state.gameEnded = true; 
+                    
+                    setTimeout(() => {
+                        showEndScreen();
+                    }, 1500);
+                }
+            }, 1000/60);
+        }
+
+        function showEndScreen() {
+            document.getElementById('end-screen').classList.remove('hidden');
+
+            const endTitle = document.getElementById('end-title');
+            const endSubtitle = document.getElementById('end-subtitle');
+            const scoreEl = document.getElementById('end-score');
+            const evalEl = document.getElementById('end-evaluation');
+            const trophy = document.getElementById('end-trophy');
+
+            const finalTime = parseFloat(state.elapsedTime.toFixed(1));
+            scoreEl.innerText = finalTime + " s";
+
+            const textDb = localization[currentLanguage];
+
+            if (finalTime <= 36.0) {
+                trophy.className = "fa-solid fa-trophy text-yellow-400 text-7xl drop-shadow-[0_0_20px_rgba(250,204,21,0.6)] animate-bounce";
+                endTitle.innerText = textDb.evalGoldTitle;
+                endSubtitle.innerText = currentLanguage === 'zh' ? "完美無瑕的逃生防護！" : "Perfect Evacuation Run!";
+                evalEl.innerHTML = textDb.evalGoldDesc.replace('{time}', finalTime);
+            } else if (finalTime <= 45.0) {
+                trophy.className = "fa-solid fa-medal text-slate-300 text-7xl drop-shadow-[0_0_15px_rgba(203,213,225,0.4)] animate-bounce";
+                endTitle.innerText = textDb.evalSilverTitle;
+                endSubtitle.innerText = currentLanguage === 'zh' ? "順利避開落石，精確撤離！" : "Safe and precise evacuation!";
+                evalEl.innerHTML = textDb.evalSilverDesc.replace('{time}', finalTime);
+            } else {
+                trophy.className = "fa-solid fa-heart-pulse text-red-400 text-7xl animate-pulse";
+                endTitle.innerText = textDb.evalBronzeTitle;
+                endSubtitle.innerText = currentLanguage === 'zh' ? "呼！平安抵達避難所！" : "Safely arrived at the shelter.";
+                evalEl.innerHTML = textDb.evalBronzeDesc.replace('{time}', finalTime);
+            }
+
+            // 更新雙語文字顯示
+            updateStaticText();
+        }
+
+        function startGame() {
+            playSound('click');
+            document.getElementById('start-screen').classList.add('hidden');
+            
+            // 核心機制優化：從 10 題庫隨機抽選 6 題 (提升教育深度與重玩樂趣)
+            const shuffledPool = [...completeQuizPool].sort(() => Math.random() - 0.5);
+            quizList = shuffledPool.slice(0, 6);
+
+            state.currentQuizIndex = 0;
+            state.elapsedTime = 0;
+            state.lastTime = performance.now(); 
+            state.distance = 60;
+            state.playerY = 130;
+            state.playerYVelocity = 0;
+            state.bgScroll = 0;
+            state.shelterX = GAME_WIDTH + 100;
+            state.isDashing = false;
+            state.playerHurtTimer = 0;
+            state.rockEffect = null;
+            state.popupTexts = [];
+            state.gameStarted = true;
+            state.gameEnded = false;
+
+            if (state.feedbackTimer) clearInterval(state.feedbackTimer);
+
+            document.getElementById('hud-distance').innerText = state.distance;
+            document.getElementById('hud-score').innerText = "0.0s";
+            document.getElementById('hud-distance-card').className = "bg-black/80 px-4 py-2 rounded-xl border-2 border-red-500 flex items-center gap-3";
+
+            renderProgressDots();
+            startRunningLoop();
+        }
+
+        function resetGame() {
+            playSound('click');
+            document.getElementById('end-screen').classList.add('hidden');
+            startGame();
+        }
+
+        function resizeArcade() {
+            const container = document.getElementById('arcade-container');
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+
+            const baseWidth = 1100;
+            const baseHeight = 720;
+
+            // 計算寬高最適縮放比例
+            const scaleX = windowWidth / baseWidth;
+            const scaleY = windowHeight / baseHeight;
+            const scale = Math.min(scaleX, scaleY, 1); // 最高不超過 100% 原始尺寸
+
+            container.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('resize', resizeArcade);
+
+        window.onload = () => {
+            loadStartScreenText();
+            updateStaticText();
+            initRain();
+            initDebris();
+            renderProgressDots();
+            resizeArcade(); // 初始調整比例
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
